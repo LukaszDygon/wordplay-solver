@@ -14,7 +14,7 @@ try:
 except ImportError:
     SCREEN_CAPTURE_AVAILABLE = False
 
-def display_comprehensive_results(word_scores):
+def display_comprehensive_results(word_scores, current_window=None, screen_capture=None):
     """Display comprehensive word results with top 5 scoring words and top 5 for each letter count."""
     if not word_scores:
         print("\nNo valid words found with the given letters.\n")
@@ -40,7 +40,113 @@ def display_comprehensive_results(word_scores):
             length_words = [f"{word.upper()}({score})" for word, score, _ in words_for_length]
             print(f"{length}: {', '.join(length_words)}")
     
+    # Word selection and typing interface
+    if current_window and screen_capture:
+        print("\nSelect word to type (1-5 for top words, {length}.{order} for length-specific, Enter to skip):")
+    else:
+        print("\nSelect word (1-5 for top words, {length}.{order} for length-specific, Enter to skip):")
+    
+    try:
+        selection = input("> ").strip()
+        if selection:
+            selected_word = parse_word_selection(selection, top_5_scores, words_by_length)
+            if selected_word:
+                if current_window and screen_capture:
+                    type_word_in_game(selected_word, current_window)
+                else:
+                    print(f"Selected word: {selected_word}")
+            else:
+                print("Invalid selection.")
+    except KeyboardInterrupt:
+        print("\nSkipping word selection.")
+    
     print()  # Extra newline for spacing
+
+def parse_word_selection(selection, top_5_scores, words_by_length):
+    """Parse user selection and return the selected word."""
+    try:
+        # Check if it's a simple number (1-5 for top scoring words)
+        if selection.isdigit():
+            index = int(selection) - 1
+            if 0 <= index < len(top_5_scores):
+                word, score, length = top_5_scores[index]
+                return word.upper()
+            else:
+                return None
+        
+        # Check if it's length.order format (e.g., "7.2" for 2nd best 7-letter word)
+        elif '.' in selection:
+            parts = selection.split('.')
+            if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                length = int(parts[0])
+                order = int(parts[1]) - 1  # Convert to 0-based index
+                
+                if length in words_by_length and 0 <= order < len(words_by_length[length]):
+                    word, score, _ = words_by_length[length][order]
+                    return word.upper()
+                else:
+                    return None
+        
+        return None
+    except (ValueError, IndexError):
+        return None
+
+def type_word_in_game(word, window_title):
+    """Type the selected word in the game window."""
+    try:
+        import pyautogui
+        import subprocess
+        import time
+        
+        print(f"Typing '{word}' in game window...")
+        
+        # Activate the window using AppleScript (macOS-specific)
+        try:
+            # Simple approach: try to activate the application that contains the window
+            # Extract likely app name from window title
+            app_name = "Word Play"  # Default for the game
+            if "Word Play" in window_title:
+                app_name = "Word Play"
+            elif "Windsurf" in window_title:
+                app_name = "Windsurf"
+            
+            # Use simple AppleScript to activate the application
+            applescript = f'tell application "{app_name}" to activate'
+            
+            result = subprocess.run(['osascript', '-e', applescript], 
+                                  capture_output=True, text=True, timeout=3)
+            
+            if result.returncode != 0:
+                # Fallback: try to click on the window using pyautogui
+                print(f"AppleScript failed, trying fallback method...")
+                # Just proceed without window activation - pyautogui will type to focused window
+            
+            time.sleep(0.5)  # Give time for window to come to front
+            
+        except subprocess.TimeoutExpired:
+            print("Window activation timed out, proceeding anyway...")
+        except Exception as e:
+            print(f"Window activation failed: {e}, proceeding anyway...")
+        
+        # Type the word
+        pyautogui.typewrite(word.lower(), interval=0.05)  # Small delay between keystrokes
+        time.sleep(0.1)
+        
+        # Press Enter
+        pyautogui.press('enter')
+        time.sleep(1)
+        
+        # Long press backspace (hold for 1 second)
+        pyautogui.keyDown('backspace')
+        time.sleep(1.0)
+        pyautogui.keyUp('backspace')
+        
+        print(f"Successfully typed '{word}'!")
+        
+    except ImportError:
+        print("Typing functionality requires pyautogui and pygetwindow")
+    except Exception as e:
+        print(f"Error typing word: {e}")
 
 def interactive_loop(solver, custom_values=None, screen_capture=None):
     """Run the solver in an interactive loop."""
@@ -112,7 +218,7 @@ def interactive_loop(solver, custom_values=None, screen_capture=None):
             word_scores = solver.find_all_words_with_scores(letters, custom_values)
             
             # Display comprehensive results
-            display_comprehensive_results(word_scores)
+            display_comprehensive_results(word_scores, current_window, screen_capture)
                 
         except KeyboardInterrupt:
             print("\nGoodbye!")
