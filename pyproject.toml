@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "wordplay-solver"
+version = "0.1.0"
+description = "A tool to find the highest scoring words from given letters"
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+authors = [
+    { name = "Your Name", email = "your.email@example.com" },
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "isort>=5.0.0",
+    "mypy>=1.0.0",
+    "types-python-dateutil>=2.8.0",
+]
+
+[project.scripts]
+wordplay-solver = "wordplay_solver.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["wordplay_solver"]
+
+[tool.black]
+line-length = 88
+target-version = ["py38"]
+include = '\.pyi?$'
+
+[project.urls]
+"Homepage" = "https://github.com/yourusername/wordplay-solver"
+"Bug Tracker" = "https://github.com/yourusername/wordplay-solver/issues"
