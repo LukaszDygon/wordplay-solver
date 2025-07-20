@@ -5,13 +5,82 @@ import sys
 from pathlib import Path
 
 from wordplay_solver.solver import WordSolver
-from wordplay_solver.scoring import get_letter_values
+from collections import defaultdict
 
-def interactive_loop(solver, custom_values=None):
+# Optional screen capture import
+try:
+    from wordplay_solver.screen_capture import ScreenCapture, list_available_windows
+    SCREEN_CAPTURE_AVAILABLE = True
+except ImportError:
+    SCREEN_CAPTURE_AVAILABLE = False
+
+def display_comprehensive_results(word_scores):
+    """Display comprehensive word results with top 5 scoring words and top 5 for each letter count."""
+    if not word_scores:
+        print("\nNo valid words found with the given letters.\n")
+        return
+    
+    # Display top 5 scoring words overall
+    print("\n=== TOP 5 SCORING WORDS ===")
+    top_5_scores = word_scores[:5]
+    top_words = [f"{word.upper()}({score})" for word, score, length in top_5_scores]
+    print(", ".join(top_words))
+    
+    # Group words by length
+    words_by_length = defaultdict(list)
+    for word, score, length in word_scores:
+        if length >= 4:  # Only show 4+ letter words
+            words_by_length[length].append((word, score, length))
+    
+    # Display top 5 words for each letter count (4+ letters)
+    if words_by_length:
+        print("\n=== TOP WORDS BY LENGTH (4+ LETTERS) ===")
+        for length in sorted(words_by_length.keys()):
+            words_for_length = words_by_length[length][:5]  # Top 5 for this length
+            length_words = [f"{word.upper()}({score})" for word, score, _ in words_for_length]
+            print(f"{length}: {', '.join(length_words)}")
+    
+    print()  # Extra newline for spacing
+
+def interactive_loop(solver, custom_values=None, screen_capture=None):
     """Run the solver in an interactive loop."""
-    print("Wordplay Solver - Interactive Mode")
+    print("=== Wordplay Solver - Interactive Mode ===")
     print("Enter letters (e.g., 'letters' or 'a1b3c3' for custom values)")
-    print("Type 'exit' or press Ctrl+C to quit\n")
+    
+    # Window selection for screen capture if available
+    current_window = None
+    if screen_capture:
+        print("\nScreen capture available!")
+        try:
+            choice = input("Would you like to select a window for screen capture? (y/n): ").strip().lower()
+            if choice in ['y', 'yes']:
+                windows = list_available_windows()
+                if windows:
+                    print("\nAvailable windows:")
+                    for i, title in enumerate(windows, 1):
+                        print(f"  {i}. {title}")
+                    
+                    try:
+                        selection = input("\nSelect window number (or press Enter to skip): ").strip()
+                        if selection:
+                            idx = int(selection) - 1
+                            if 0 <= idx < len(windows):
+                                current_window = windows[idx]
+                                print(f"Selected window: '{current_window}'")
+                                print("Press Enter (empty input) to capture from this window")
+                            else:
+                                print("Invalid selection, continuing without window selection")
+                    except ValueError:
+                        print("Invalid input, continuing without window selection")
+                else:
+                    print("No windows available for selection")
+        except KeyboardInterrupt:
+            print("\nSkipping window selection")
+    
+    if current_window:
+        print(f"\nWindow mode: '{current_window}' - Press Enter to capture")
+    
+    print("Type '/exit' or press Ctrl+C to quit\n")
     
     while True:
         try:
@@ -19,22 +88,31 @@ def interactive_loop(solver, custom_values=None):
             user_input = input("Enter letters: ").strip()
             
             # Check for exit command
-            if user_input.lower() in ('exit', 'quit', 'q'):
+            if user_input.lower() == '/exit':
                 print("Goodbye!")
                 break
                 
+            # Handle empty input for window capture
             if not user_input:
-                continue
-                
-            # Find the best word
-            best_word, score = solver.find_best_word(user_input, custom_values)
-            
-            # Display results
-            if best_word:
-                print(f"\nBest word: {best_word}")
-                print(f"Score: {score}\n")
+                if current_window and screen_capture:
+                    detected_letters = screen_capture.detect_letters_from_screen(window_title=current_window)
+                    if detected_letters:
+                        letters = ''.join(detected_letters)
+                        print(f"Detected letters: {letters}")
+                    else:
+                        print(f"No letters detected from window '{current_window}'")
+                        continue
+                else:
+                    continue
             else:
-                print("\nNo valid words found with the given letters.\n")
+                # Use the input as letters directly
+                letters = user_input
+                
+            # Find all words with scores
+            word_scores = solver.find_all_words_with_scores(letters, custom_values)
+            
+            # Display comprehensive results
+            display_comprehensive_results(word_scores)
                 
         except KeyboardInterrupt:
             print("\nGoodbye!")
@@ -43,42 +121,34 @@ def interactive_loop(solver, custom_values=None):
             print(f"\nError: {e}\n")
 
 def main():
-    """Run the wordplay solver from the command line."""
-    parser = argparse.ArgumentParser(description='Find the highest scoring word from given letters.')
-    parser.add_argument('letters', nargs='?', help='Letters to use (e.g., "letters" or "a1b3c3" for custom values)')
+    """Run the wordplay solver in interactive mode."""
+    parser = argparse.ArgumentParser(description='Interactive wordplay solver - find the highest scoring words from given letters.')
     parser.add_argument('--dict', '-d', help='Path to custom dictionary file')
-    parser.add_argument('--config', '-c', help='Path to config file with custom letter values')
-    parser.add_argument('--interactive', '-i', action='store_true', help='Run in interactive mode')
+    
+
     
     args = parser.parse_args()
     
-    # Load custom letter values from config file if provided
+    # No custom letter values - simplified to use standard Scrabble values only
     custom_values = None
-    if args.config:
+    
+    # Initialize screen capture if available and needed
+    screen_capture = None
+    if SCREEN_CAPTURE_AVAILABLE:
         try:
-            custom_values = get_letter_values(args.config)
-        except Exception as e:
-            print(f"Error loading config file: {e}", file=sys.stderr)
-            return 1
+            screen_capture = ScreenCapture()
+        except ImportError as e:
+            print(f"Screen capture not available: {e}", file=sys.stderr)
+            if any(hasattr(args, attr) and getattr(args, attr) for attr in ['screen', 'window']):
+                print("Install screen capture dependencies with: pip install -e .[screen]")
+                return 1
     
     # Initialize the solver
     try:
         solver = WordSolver(args.dict)
         
-        # Interactive mode
-        if args.interactive or not args.letters:
-            interactive_loop(solver, custom_values)
-            return 0
-            
-        # Single-run mode
-        best_word, score = solver.find_best_word(args.letters, custom_values)
-        
-        if best_word:
-            print(f"Best word: {best_word}")
-            print(f"Score: {score}")
-        else:
-            print("No valid words found with the given letters.")
-            return 1
+        # Always run in interactive mode
+        interactive_loop(solver, custom_values, screen_capture)
             
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)

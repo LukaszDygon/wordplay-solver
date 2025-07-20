@@ -27,12 +27,26 @@ dev = [
     "mypy>=1.0.0",
     "types-python-dateutil>=2.8.0",
 ]
+screen = [
+    "pillow>=9.0.0",
+    "pytesseract>=0.3.10",
+    "pyautogui>=0.9.54",
+    "opencv-python>=4.5.0",
+    "numpy>=1.21.0",
+]
 
 [project.scripts]
 wordplay-solver = "wordplay_solver.__main__:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["wordplay_solver"]
+packages = ["src/wordplay_solver"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/wordplay_solver",
+    "README.md",
+    "windsurf_rules.md"
+]
 
 [tool.black]
 line-length = 88

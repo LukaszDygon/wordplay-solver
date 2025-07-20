@@ -11,14 +11,16 @@ try:
 except ImportError:
     PKG_RESOURCES_AVAILABLE = False
 
-# Default dictionary path (will be created if not exists)
-DEFAULT_DICT_PATH = Path.home() / '.wordplay_solver' / 'dictionary.txt'
+# Default dictionary path - use local colins.txt file
+# Get the project root directory (where colins.txt is located)
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+DEFAULT_DICT_PATH = PROJECT_ROOT / 'colins.txt'
 DEFAULT_DICT_URL = 'https://raw.githubusercontent.com/dwyl/english-words/master/words_alpha.txt'
 
 
 def ensure_dictionary_exists(dict_path: Optional[Path] = None) -> Path:
     """
-    Ensure the dictionary file exists, downloading it if necessary.
+    Ensure the dictionary file exists.
     
     Args:
         dict_path: Path to dictionary file, uses default if None
@@ -31,30 +33,12 @@ def ensure_dictionary_exists(dict_path: Optional[Path] = None) -> Path:
     
     dict_path = Path(dict_path).expanduser().resolve()
     
-    try:
-        import urllib.request
-        import ssl
-        
-        # Create directory if it doesn't exist
-        dict_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Always download the latest dictionary
-        print(f"Downloading dictionary to {dict_path}...")
-        context = ssl._create_unverified_context()
-        req = urllib.request.Request(
-            DEFAULT_DICT_URL,
-            headers={'User-Agent': 'Mozilla/5.0'}
-        )
-        with urllib.request.urlopen(req, context=context) as response, open(dict_path, 'wb') as out_file:
-            out_file.write(response.read())
-            
-    except Exception as e:
-        if not dict_path.exists():
-            raise RuntimeError(f"Failed to download dictionary: {e}")
-        print(f"Warning: Could not update dictionary, using existing file at {dict_path}")
+    # Check if the dictionary file exists
+    if not dict_path.exists():
+        raise RuntimeError(f"Dictionary file not found at {dict_path}")
     
-    if not dict_path.exists() or dict_path.stat().st_size == 0:
-        raise RuntimeError(f"Dictionary file is empty or could not be created at {dict_path}")
+    if dict_path.stat().st_size == 0:
+        raise RuntimeError(f"Dictionary file is empty at {dict_path}")
     
     return dict_path
 
